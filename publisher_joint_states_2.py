@@ -4,6 +4,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Int32MultiArray
 from Rosmaster_Lib import Rosmaster
 
 class JointStatePublisher(Node):
@@ -11,7 +12,7 @@ class JointStatePublisher(Node):
         super().__init__('rosmaster_joint_state_pub')
 
         # Parametri
-        self.declare_parameter('com_port', '/dev/myserial')
+        #self.declare_parameter('com_port', '/dev/myserial')
         self.declare_parameter('counts_per_rev', 1300)    # TODO MODIFICARE QUESTO IN BASE
         self.declare_parameter('publish_hz', 10.0)        # frequenza di pubblicazione
         self.declare_parameter('joint_names', [
@@ -21,16 +22,10 @@ class JointStatePublisher(Node):
             'rear_right_wheel_joint',
         ])
 
-        com_port         = self.get_parameter('com_port').value
+        #com_port         = self.get_parameter('com_port').value
         self.ticks_rev   = self.get_parameter('counts_per_rev').value
         hz               = self.get_parameter('publish_hz').value
         self.joint_names = self.get_parameter('joint_names').value
-
-        # Inizializza la libreria
-        self.bot = Rosmaster(com=com_port, debug=False)
-        self.bot.create_receive_threading()
-        # Chiediamo al firmware di inviare i dati encoder
-        self.bot.set_auto_report_state(enable=True, forever=True) #l'ho commentato perchè al vecchio codice mi dava errore
 
         # Stato interno: ultimi contatori e tempo
         self.last_counts = [0, 0, 0, 0]
@@ -39,18 +34,26 @@ class JointStatePublisher(Node):
         # Publisher
         self.js_pub = self.create_publisher(JointState, '/joint_states', 10)
 
+        # Subscriber
+        self.encoder_data_subscriber = self.create_subscription(
+            Int32MultiArray,
+            '/encoder_data',
+            self.timer_cb,
+            1
+        )
+
         # Timer
         period = 1.0 / hz
-        self.create_timer(period, self.timer_cb)
+        #self.create_timer(period, self.timer_cb)
 
-    def timer_cb(self):
+    def timer_cb(self, msg):
         now = time.time()
         dt  = now - self.last_time
         if dt <= 0.0:
             return
 
         # Legge valori encoder
-        m1, m2, m3, m4 = self.bot.get_motor_encoder()
+        m1, m2, m3, m4 = list(msg.data)
         counts = [m1, m2, m3, m4]
 
         # Calcola velocità angolari [rad/s]
@@ -79,8 +82,6 @@ def main(args=None):
     try:
         rclpy.spin(node)
     finally:
-        # Disabilito le auto-report per pulizia
-        node.bot.set_auto_report_state(enable=False, forever=True)
         node.destroy_node()
         rclpy.shutdown()
 

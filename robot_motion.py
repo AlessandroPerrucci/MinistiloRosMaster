@@ -12,6 +12,7 @@ class RosmasterController(Node):
         # Inizializza il Rosmaster
         self.bot = Rosmaster(debug=True)
         self.bot.create_receive_threading()
+        self.bot.set_auto_report_state(enable=True, forever=True)
 
         # Sottoscrizione al topic /cmd_vel
         self.cmd_vel_subscriber = self.create_subscription(
@@ -54,11 +55,13 @@ class RosmasterController(Node):
 def main(args=None):
     rclpy.init(args=args)
     rosmaster_controller = RosmasterController()
-    rclpy.spin(rosmaster_controller)
-
-    # Cleanup
-    rosmaster_controller.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(rosmaster_controller)
+    finally:
+        # Disabilito le auto-report per pulizia
+        rosmaster_controller.bot.set_auto_report_state(enable=False, forever=True)
+        rosmaster_controller.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
